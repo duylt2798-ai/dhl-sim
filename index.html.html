@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mô phỏng rủi ro điện hóa đội xe DHL – Bước 5</title>
+<style>
+:root{--bg:#e6eef5;--panel:rgba(255,255,255,.93);--text:#16222d;--muted:#51606d;--line:#c3cfd9;--btn:#e8eef3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--panel:rgba(28,36,44,.93);--text:#eef3f7;--muted:#a9b6c2;--line:#3b4854;--btn:#2b3743}}
+:root[data-theme="dark"]{--panel:rgba(28,36,44,.93);--text:#eef3f7;--muted:#a9b6c2;--line:#3b4854;--btn:#2b3743}
+html,body{height:100%;margin:0}
+body{background:var(--bg);font:14px/1.45 system-ui,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text);overflow:hidden}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+.panel{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.panel[hidden]{display:none}
+#hint{top:calc(12px + env(safe-area-inset-top,0px));left:12px;color:var(--muted)}
+#stats{top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.stat{text-align:center;min-width:100px}.stat b{display:block;font-size:20px;line-height:1.1}
+#card{top:calc(124px + env(safe-area-inset-top,0px));left:12px;width:270px}
+#risks{top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:330px;max-height:calc(100vh - 210px);overflow-y:auto}
+.sw{display:flex;gap:8px;align-items:center;padding:6px 0;cursor:pointer}.sw input{width:18px;height:18px;accent-color:#2f6fdb;flex:none}
+.row2{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+#deliv{top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);white-space:nowrap}
+#risks.min #rl,#risks.min .row2,#risks.min #why{display:none}
+.sw{padding:4px 0!important}
+#log{right:12px;bottom:12px;width:330px;max-height:130px;overflow-y:auto}
+.det{padding:0 0 6px 26px;color:var(--muted)}.rb{height:8px;border-radius:4px;margin:3px 0}#why{margin-top:6px}.note{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);color:var(--muted)}
+#mapbox{left:12px;bottom:12px}#map{display:block;border-radius:6px}
+#legend{margin-top:6px;max-width:256px}#legend span{white-space:nowrap;margin-right:8px}
+#ctrl{left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{font:inherit;color:var(--text);background:var(--btn);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+.btn.on{background:#2f6fdb;color:#fff;border-color:#2f6fdb}
+#clock{font-weight:700;min-width:130px;text-align:center}
+.bar{height:10px;background:var(--line);border-radius:5px;margin:4px 0 8px;overflow:hidden}.bar i{display:block;height:100%;background:#2e9e5b}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="hint" class="panel">Kéo chuột để xoay,<br>cuộn để zoom,<br>bấm công tắc để bật rủi ro</div>
+<div id="stats" class="panel">
+ <div class="stat"><b id="s1">0</b>Xe sẵn sàng xuất phát</div>
+ <div class="stat"><b id="s2">0</b>Xe đang chờ sạc</div>
+ <div class="stat"><b id="s3">0</b>Xe đang có cảnh báo</div>
+ <div class="stat"><b id="s4">0/4</b>Trụ hoạt động</div>
+ <div class="stat"><b id="s5">0</b>Xe bị hỏng</div>
+</div>
+<div id="card" class="panel" hidden></div>
+<div id="deliv" class="panel">Điểm giao hàng: <b id="h1">0</b> bình thường · <b id="h2">0</b> bị ảnh hưởng do rủi ro · <b id="h3">0</b> thất bại · <b id="h4">6</b> chờ</div>
+<div id="risks" class="panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>Bảng điều khiển rủi ro</b><button class="btn" id="rmin" style="padding:2px 10px">Thu gọn</button></div><div id="rl"></div><div class="row2"><button class="btn" id="all">Bật tất cả rủi ro</button><button class="btn" id="none">Tắt tất cả</button></div>
+ <label class="sw" style="border-top:1px solid var(--line);margin-top:8px"><input type="checkbox" id="ctl"><span><b>Bật biện pháp kiểm soát</b></span></label><div id="why"></div>
+ <div class="note">Điểm S, O, D do nhóm tự đánh giá. RPN sau kiểm soát là mức giảm dự kiến, chưa kiểm chứng.</div>
+ <div class="note" style="border-top:0;margin-top:4px;padding-top:0">Hậu quả cuối cùng (hết điện, chết máy, giao không thành) là kịch bản xấu nhất nếu không ai phát hiện kịp, không phải số đo.</div></div>
+<div id="mapbox" class="panel"><canvas id="map" width="256" height="168"></canvas>
+ <div id="legend"><span style="color:#2e9e5b">●</span>Đang sạc <span style="color:#e0a800">●</span>Chờ sạc <span style="color:#2f6fdb">●</span>Sẵn sàng <span style="color:#7a8794">●</span>Đang di chuyển <span style="color:#9aa7b3">■</span>Điểm giao</div></div>
+<div id="ctrl" class="panel">
+ <button class="btn" data-sp="0">Tạm dừng</button><button class="btn on" data-sp="1">x1</button><button class="btn" data-sp="2">x2</button>
+ <button class="btn" id="addT">Thêm xe</button><button class="btn" id="rst">Đặt lại đội xe</button><button class="btn" id="reset">Đặt lại camera</button><span id="clock"></span>
+</div>
+<div id="log" class="panel"><b>Nhật ký sự kiện</b><div>Chưa có sự kiện.</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===== DỮ LIỆU RỦI RO (chỉ dùng đúng các số này; sẽ hiển thị ở Bước 3) ===== */
+const RISKS={
+ R01:{ten:'Lập lịch sạc sai',S:8,O:6,D:6,truoc:288,bienPhap:'Điều phối viên rà soát, lịch thủ công dự phòng',sau:72},
+ R02:{ten:'BMS báo sai dung lượng pin',S:8,O:5,D:6,truoc:240,bienPhap:'Đối chiếu SOC trước khi gán tuyến',sau:72},
+ R03:{ten:'Cảm biến nhiệt đo sai',S:9,O:4,D:7,truoc:252,bienPhap:'Hiệu chuẩn định kỳ, cảnh báo',sau:54},
+ R04:{ten:'Pin quá nhiệt',S:10,O:4,D:7,truoc:280,bienPhap:'Giám sát nhiệt độ, ngắt sạc khi vượt ngưỡng',sau:60},
+ R05:{ten:'Trạm sạc ngừng hoạt động',S:7,O:5,D:3,truoc:105,bienPhap:'Trụ dự phòng, bảo trì định kỳ',sau:42},
+ R06:{ten:'Mất kết nối mạng',S:6,O:5,D:5,truoc:150,bienPhap:'Đường truyền dự phòng, lịch lưu sẵn',sau:36}
+};
+/* ===== HẰNG SỐ CẢNH ===== */
+const $=id=>document.getElementById(id);
+const BAYX=[-9,-3,3,9,15] /* trụ thứ 5 = trụ dự phòng, chỉ dùng khi R05 + biện pháp kiểm soát */, QX=i=>-14-6*i;
+const ROUTES=[
+ {c:'#3b82c4',pts:[[34,-8],[44,-8],[44,-26],[18,-30],[-18,-30],[-42,-20],[-42,9],[-40,9]]},
+ {c:'#e08a2e',pts:[[34,-8],[44,-8],[46,10],[36,26],[0,30],[-36,26],[-47,18],[-47,9],[-40,9]]}];
+ROUTES.forEach(r=>{r.seg=[];r.len=0;for(let i=0;i<r.pts.length-1;i++){const d=Math.hypot(r.pts[i+1][0]-r.pts[i][0],r.pts[i+1][1]-r.pts[i][1]);r.seg.push(d);r.len+=d;}});
+const risks={R01:false,R02:false,R03:false,R04:false,R05:false,R06:false};
+let ctl=false; // công tắc tổng: biện pháp kiểm soát
+const CL={charging:'#2e9e5b',ready:'#2f6fdb',queue:'#e0a800',toBay:'#7a8794',depart:'#7a8794',route:'#7a8794',broken:'#d64545'};
+ 
+/* ===== THREE.JS CƠ BẢN ===== */
+const renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();
+const skyCanvas=document.createElement('canvas');skyCanvas.width=8;skyCanvas.height=256;
+const skyCtx=skyCanvas.getContext('2d'),skyGrad=skyCtx.createLinearGradient(0,0,0,256);
+skyGrad.addColorStop(0,'#c3ddea');skyGrad.addColorStop(.65,'#e7f0f3');skyGrad.addColorStop(1,'#f4f6ed');skyCtx.fillStyle=skyGrad;skyCtx.fillRect(0,0,8,256);
+const skyTexture=new THREE.CanvasTexture(skyCanvas);skyTexture.encoding=THREE.sRGBEncoding;scene.background=skyTexture;
+scene.fog=new THREE.Fog(0xe7f0f3,115,260);
+const camera=new THREE.PerspectiveCamera(45,1,0.5,400);
+scene.add(new THREE.HemisphereLight(0xe9f6ff,0xb5bea8,.8));
+const sun=new THREE.DirectionalLight(0xfff2da,1.05);sun.position.set(-24,48,18);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-62,right:62,top:50,bottom:-50,near:1,far:115});sun.shadow.bias=-.00025;sun.shadow.normalBias=.045;scene.add(sun);
+const unitBox=new THREE.BoxGeometry(1,1,1),wheelGeo=new THREE.CylinderGeometry(.45,.45,.3,12),puffGeo=new THREE.SphereGeometry(.5,10,7);
+const mat=c=>new THREE.MeshStandardMaterial({color:c,roughness:.78,metalness:.06});
+function box(w,h,d,c,x,y,z,p){const m=new THREE.Mesh(unitBox,mat(c));m.scale.set(w,h,d);m.position.set(x,y,z);m.castShadow=h>.25;m.receiveShadow=true;(p||scene).add(m);return m;}
+function detailBuilder(parent){
+ const palette=new Map();
+ return (w,h,d,c,x,y,z)=>{if(!palette.has(c))palette.set(c,mat(c));const m=new THREE.Mesh(unitBox,palette.get(c));m.scale.set(w,h,d);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;};
+}
+// Bake decorative parts by material once, retaining separate mutable simulation meshes.
+function bakeDetails(group){
+ const sets=new Map();group.children.slice().forEach(m=>{if(!m.isMesh)return;const key=m.material;if(!sets.has(key))sets.set(key,[]);sets.get(key).push(m);});
+ sets.forEach(ms=>{if(ms.length<2)return;const attrs={position:[],normal:[],uv:[]};ms.forEach(m=>{m.updateMatrix();const geo=m.geometry.index?m.geometry.toNonIndexed():m.geometry.clone();geo.applyMatrix4(m.matrix);Object.keys(attrs).forEach(k=>{const a=geo.getAttribute(k);if(a)for(let i=0;i<a.array.length;i++)attrs[k].push(a.array[i]);});geo.dispose();group.remove(m);});
+ const geo=new THREE.BufferGeometry();Object.keys(attrs).forEach(k=>geo.setAttribute(k,new THREE.Float32BufferAttribute(attrs[k],k==='uv'?2:3)));geo.computeBoundingSphere();const m=new THREE.Mesh(geo,ms[0].material);m.castShadow=true;m.receiveShadow=true;group.add(m);});
+}
+function flatTexture(c){const t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());return t;}
+function label(txt,w,pid){ // nhãn chữ dạng sprite
+ const c=document.createElement('canvas');c.width=384;c.height=128;const g=c.getContext('2d');
+ g.fillStyle='rgba(255,255,255,.98)';g.fillRect(0,0,384,128);g.strokeStyle='#405463';g.lineWidth=5;g.strokeRect(3,3,378,122);
+ g.font='bold 66px system-ui,Arial,sans-serif';g.textAlign='center';g.fillStyle='#16222d';g.fillText(txt,192,87);
+ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:flatTexture(c),transparent:true,depthTest:false,depthWrite:false,fog:false,toneMapped:false}));s.scale.set(w,w/3,1);s.renderOrder=20;return s;}
+const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=64;
+const gg=glowCanvas.getContext('2d'),gr=gg.createRadialGradient(32,32,3,32,32,31);gr.addColorStop(0,'rgba(255,255,255,.75)');gr.addColorStop(.3,'rgba(255,255,255,.32)');gr.addColorStop(1,'rgba(255,255,255,0)');gg.fillStyle=gr;gg.fillRect(0,0,64,64);const glowTexture=new THREE.CanvasTexture(glowCanvas);
+function glow(parent,size){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture,transparent:true,opacity:.5,depthWrite:false,fog:false}));s.scale.set(size,size,1);parent.add(s);return s;}
+function groundRing(radius,color){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');g.strokeStyle='#fff';g.lineWidth=8;g.shadowColor='#fff';g.shadowBlur=9;g.beginPath();g.arc(64,64,49,0,Math.PI*2);g.stroke();const m=new THREE.Mesh(new THREE.PlaneGeometry(radius*2,radius*2),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),color,transparent:true,opacity:.85,depthWrite:false,side:THREE.DoubleSide}));m.rotation.x=-Math.PI/2;m.renderOrder=2;return m;}
+/* ===== MÔI TRƯỜNG: nền, depot, đường, cổng, văn phòng, cây ===== */
+const scenery=new THREE.Group();scene.add(scenery);const env=detailBuilder(scenery);
+env(160,.2,110,0xcdddc8,0,-.1,0);
+// Deterministic canvas grain: never consumes Math.random used by the simulation.
+const asphalt=document.createElement('canvas');asphalt.width=asphalt.height=256;const ag=asphalt.getContext('2d');ag.fillStyle='#89969f';ag.fillRect(0,0,256,256);let grain=9271;
+for(let i=0;i<11000;i++){grain=(grain*1664525+1013904223)>>>0;const x=grain%256;grain=(grain*1664525+1013904223)>>>0;const y=grain%256;ag.fillStyle=i%2?'rgba(255,255,255,.06)':'rgba(23,39,49,.07)';ag.fillRect(x,y,1,1);}
+const asphaltTex=flatTexture(asphalt);asphaltTex.wrapS=asphaltTex.wrapT=THREE.RepeatWrapping;asphaltTex.repeat.set(9,7);
+const roadMat=new THREE.MeshStandardMaterial({map:asphaltTex,roughness:.98});
+function road(w,d,x,z,y=.08,rot=0){const m=new THREE.Mesh(unitBox,roadMat);m.scale.set(w,.1,d);m.position.set(x,y,z);m.rotation.y=rot;m.receiveShadow=true;scene.add(m);return m;}
+road(35,24.5,0,.5);road(57,5,-11.5,9,.14);road(57,5,11.5,-8,.14);
+ROUTES.forEach(r=>{for(let i=0;i<r.pts.length-1;i++){const a=r.pts[i],b=r.pts[i+1],dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz);road(4.8,len+.15,(a[0]+b[0])/2,(a[1]+b[1])/2,.025,Math.atan2(dx,dz));}
+ const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(r.pts.map(p=>new THREE.Vector3(p[0],.2,p[1]))),new THREE.LineBasicMaterial({color:r.c}));scene.add(l);});
+const bayPads=[];
+BAYX.forEach((x,i)=>{const c=document.createElement('canvas');c.width=256;c.height=512;const g=c.getContext('2d');g.fillStyle='#839e9c';g.fillRect(0,0,256,512);g.strokeStyle='#edf4e9';g.lineWidth=6;g.strokeRect(13,12,230,485);g.fillStyle='#f6faf5';g.textAlign='center';g.font=i===4?'bold 37px system-ui':'bold 86px system-ui';g.fillText(i===4?'Dự phòng':String(i+1),128,446);g.lineWidth=5;g.beginPath();g.moveTo(128,85);g.lineTo(128,175);g.moveTo(102,113);g.lineTo(128,85);g.lineTo(154,113);g.stroke();const m=new THREE.Mesh(new THREE.PlaneGeometry(3.4,6.2),new THREE.MeshStandardMaterial({map:flatTexture(c),roughness:.96}));m.rotation.x=-Math.PI/2;m.position.set(x,.205,3.8);m.receiveShadow=true;scene.add(m);bayPads.push(m);});
+// Pavements, warehouse glazing and loading door; all outside vehicle paths.
+env(12,.25,7,0xdbe0dc,0,.15,-15.5);env(10,5,5,0xf2f4ef,0,2.5,-15);env(10.6,.35,5.6,0xffcc00,0,5.2,-15);
+env(10.4,.16,5.4,0x657987,0,5.46,-15);env(3,2.9,.08,0x627884,-2.5,1.5,-12.46);
+for(let i=0;i<6;i++)env(2.8,.06,.1,0xabbac1,-2.5,.3+i*.46,-12.4);
+for(let i=0;i<3;i++){env(1.25,1.4,.1,0x35657b,.2+i*1.65,3,-12.42);env(1.35,.1,.14,0xffffff,.2+i*1.65,2.27,-12.35);env(.06,1.45,.14,0xc9d7da,.2+i*1.65,3,-12.34);}
+env(1,2.2,.1,0x35657b,3.5,1.1,-12.42);env(10,.35,.1,0xc2d0cf,0,.4,-12.42);
+env(.5,4,.5,0xd40511,-17.5,2,6.5);env(.5,4,.5,0xd40511,-17.5,2,11.5);env(.5,.4,5.5,0xffcc00,-17.5,3.8,9);
+for(let i=0;i<10;i++){const x=-16+i*3.7;env(.12,1.5,.12,0x657a7e,x,.75,13.4);}
+env(34,.09,.09,0x8d9e9f,.6,.6,13.4);env(34,.09,.09,0x8d9e9f,.6,1.4,13.4);
+const trunkGeo=new THREE.CylinderGeometry(.25,.36,2.2,7),leafGeo=new THREE.SphereGeometry(1.5,7,5),trunkMat=mat(0x87694e),leafMat=mat(0x72a36b);
+[[-26,-20],[-20,-26],[27,-22],[30,22],[24,27],[-30,22],[-14,-24]].forEach(([x,z])=>{env(2.6,.18,2.6,0xb8c7b2,x,.09,z);const t=new THREE.Mesh(trunkGeo,trunkMat);t.position.set(x,1.1,z);t.castShadow=true;scenery.add(t);const k=new THREE.Mesh(leafGeo,leafMat);k.position.set(x,3.3,z);k.scale.set(1,1.35,1);k.castShadow=true;scenery.add(k);});
+bakeDetails(scenery);
+
+/* ===== TRỤ SẠC: đèn xanh = hoạt động, vàng = chờ, đỏ = lỗi ===== */
+const chargers=[],pickables=[];
+BAYX.forEach((bx,i)=>{
+ const g=new THREE.Group();g.position.set(bx+1.7,0,4);
+ const details=new THREE.Group();g.add(details);const part=detailBuilder(details);
+ part(.9,.3,.9,0x657983,0,.15,0);part(.65,2.2,.62,0xe8eeed,0,1.3,0);part(.9,.8,.7,0x2f6fdb,0,2.6,0);
+ part(.58,.4,.06,0x203d4c,0,2.65,-.38);part(.4,.04,.02,0x8de0d4,0,2.72,-.42);part(.25,.03,.02,0x8de0d4,-.07,2.59,-.42);
+ part(.12,.34,.12,0x243e49,.37,1.9,-.18);
+ // Coiled cable formed from short cylinders; no external assets/addons.
+ const wireMat=mat(0x263c48),wireGeo=new THREE.CylinderGeometry(.04,.04,1,6);
+ for(let k=0;k<16;k++){const a=k*Math.PI*2/16,b=(k+1)*Math.PI*2/16,ax=.27*Math.cos(a),ay=1.38+.43*Math.sin(a),bx=.27*Math.cos(b),by=1.38+.43*Math.sin(b);const m=new THREE.Mesh(wireGeo,wireMat);m.scale.y=Math.hypot(bx-ax,by-ay);m.rotation.z=-Math.atan2(bx-ax,by-ay);m.position.set((ax+bx)/2,(ay+by)/2,-.4);details.add(m);}bakeDetails(details);
+ const lamp=new THREE.Mesh(new THREE.SphereGeometry(.22,10,7),new THREE.MeshBasicMaterial({color:0xe0a800}));lamp.position.set(0,3.2,0);g.add(lamp);const halo=glow(lamp,1.3);g.userData.lampHalo=halo;
+ const lb=label(i===4?'Dự phòng':'Trụ '+(i+1),2.6);lb.position.set(0,4.4,0);g.add(lb);
+ const c={kind:'charger',i,group:g,lamp,faulty:false};g.userData.ent=c;scene.add(g);chargers.push(c);pickables.push(g);});
+ 
+/* ===== ĐIỂM GIAO HÀNG (nhà): mỗi tuyến 3 điểm ===== */
+const HS={'chờ':[0x9aa7b3,'Chờ giao'],'đúng':[0x2e9e5b,'Giao bình thường'],'trễ':[0xe0a800,'Bị ảnh hưởng do rủi ro'],'thất bại':[0xd64545,'Không giao được']};
+const HOUSES=[];
+function setHouse(h,st,cause){h.status=st;h.cause=cause||'';h.beacon.material.color.setHex(HS[st][0]);}
+ROUTES.forEach((r,ri)=>[.25,.5,.75].forEach(f=>{
+ const p=posOn(r,f*r.len),q=posOn(r,f*r.len+1),dx=q[0]-p[0],dz=q[1]-p[1],d=Math.hypot(dx,dz)||1;let nx=-dz/d,nz=dx/d;if(p[0]*nx+p[1]*nz<0){nx=-nx;nz=-nz;}
+ const g=new THREE.Group();g.position.set(p[0]+nx*6,0,p[1]+nz*6);
+ box(3.2,2.2,3.2,0xf2ede4,0,1.1,0,g);
+ const roof=new THREE.Mesh(new THREE.CylinderGeometry(0,2.6,1.6,4),mat(0xb5533c));roof.position.y=3;roof.rotation.y=Math.PI/4;roof.castShadow=true;g.add(roof);
+ const details=new THREE.Group();g.add(details);const part=detailBuilder(details);
+ part(3.8,.2,3.8,0xd8d9cc,0,.1,0);part(.65,1.45,.08,0x8a6348,-.65,.77,1.65);part(.8,.8,.08,0x477f94,.72,1.35,1.65);part(.06,.85,.1,0xf8f7ee,.72,1.35,1.7);part(.84,.06,.1,0xf8f7ee,.72,1.35,1.7);part(.12,1,.12,0x6d7c7a,1.9,.5,1.5);part(.5,.35,.4,0x668fa1,1.9,1,1.5);bakeDetails(details);
+ const beacon=new THREE.Mesh(new THREE.SphereGeometry(.5,10,8),new THREE.MeshBasicMaterial({color:0x9aa7b3}));beacon.position.y=4.7;g.add(beacon);glow(beacon,2.2);
+ const h={kind:'house',n:HOUSES.length+1,route:ri,f,group:g,beacon,status:'chờ',holder:null,cause:''};g.userData.ent=h;scene.add(g);pickables.push(g);HOUSES.push(h);}));
+function claim(t){const r=ROUTES[t.route];t.claims=HOUSES.filter(h=>h.route===t.route&&!h.holder&&h.f*r.len>t.routeS);t.claims.forEach(h=>{h.holder=t;setHouse(h,'chờ');});} // xe nhận đơn của tuyến
+function release(t){t.claims.forEach(h=>{if(h.holder===t)h.holder=null;});t.claims=[];}
+ 
+/* ===== XE TẢI ĐIỆN ===== */
+function makeTruck(i){
+ const g=new THREE.Group();
+ const cargo=box(2,2.2,3,0xf4f6f8,0,1.9,.7,g),stripe=box(2.04,.35,3.04,0xffcc00,0,1.3,.7,g),cab=box(2,1.6,1.5,0x7a8794,0,1.4,-1.5,g);
+ cab.material.roughness=.4;cab.material.metalness=.15;cargo.material.roughness=.65;
+ const details=new THREE.Group();g.add(details);const part=detailBuilder(details);
+ part(1.8,.3,4.2,0x344954,0,.55,0);part(1.7,.5,.05,0x345666,0,1.8,-2.27);
+ part(1.75,.12,.06,0xc7e1e6,0,2.06,-2.25);part(1.8,.16,.12,0x536b77,0,.72,-2.23);
+ part(.8,.18,.05,0x243c47,0,1.04,-2.27);
+ [-1,1].forEach(side=>{part(.03,.52,.85,0x345666,side*1.015,1.83,-1.48);part(.05,.06,.36,0xdce7e9,side*1.026,1.4,-1.3);part(.1,.2,.22,0x3b505c,side*1.05,1.77,-1.97);part(.07,.16,.16,0x9cb5c0,side*1.105,1.78,-2);part(.34,.18,.05,0xffefc5,side*.65,1.15,-2.26);
+ part(.025,.55,.55,0x345666,side*1.022,2,.65);part(.03,.31,.31,0xeef3ef,side*1.04,2,.65);
+ for(let k=0;k<5;k++)part(.022,.035,.34,0xc9d5d9,side*1.016,2.65,-.4+k*.5);
+ part(.025,.11,2.65,0xc6d2d8,side*1.014,1.01,.7);});
+ part(1.9,1.85,.035,0xdfe8e9,0,1.93,2.20);part(.035,1.8,.05,0x718893,0,1.95,2.195);
+ [-.7,.7].forEach(x=>part(.2,.15,.05,0xe78b74,x,.85,2.19));
+ const tyre=mat(0x26343e),rim=mat(0xa6bac3);rim.metalness=.55;rim.roughness=.35;const hubGeo=new THREE.CylinderGeometry(.24,.24,.025,10);
+ [[-1,-1.4],[1,-1.4],[-1,1.5],[1,1.5]].forEach(([x,z])=>{const w=new THREE.Mesh(wheelGeo,tyre);w.rotation.z=Math.PI/2;w.position.set(x,.45,z);w.castShadow=true;details.add(w);const hub=new THREE.Mesh(hubGeo,rim);hub.rotation.z=Math.PI/2;hub.position.set(x*1.13,.45,z);details.add(hub);});
+ bakeDetails(details);
+ const warningHalo=groundRing(3.1,0xe36745);warningHalo.position.y=.27;warningHalo.visible=false;g.add(warningHalo);g.userData.warningHalo=warningHalo;
+ scene.add(g);
+
+ // UI nổi: thanh SOC + nhãn, luôn quay về phía camera
+ const ui=new THREE.Group();box(2.4,.34,.02,0x1f2a33,0,0,0,ui);
+ const fg=new THREE.BoxGeometry(1,.2,.03);fg.translate(.5,0,0);const fill=new THREE.Mesh(fg,new THREE.MeshBasicMaterial({color:0x2e9e5b}));fill.position.set(-1.1,0,.03);ui.add(fill);
+ const lb=label('Xe '+(i+1),2.2);lb.position.set(0,.8,0);ui.add(lb);scene.add(ui);
+ const tick=new THREE.Mesh(new THREE.BoxGeometry(.08,.34,.04),new THREE.MeshBasicMaterial({color:0xffffff}));tick.position.z=.06;tick.visible=false;ui.add(tick); // vạch SOC thật
+ const msg=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true}));msg.position.set(0,1.7,0);msg.visible=false;ui.add(msg); // nhãn cảnh báo
+ ui.traverse(o=>{if(o.material){o.material.depthTest=false;o.material.depthWrite=false;o.material.fog=false;o.material.toneMapped=false;o.renderOrder=20;}});
+ const puffs=[0,1,2,3].map(()=>{const m=new THREE.Mesh(puffGeo,new THREE.MeshBasicMaterial({color:0x8a8f94,transparent:true,opacity:.5,depthWrite:false}));m.visible=false;scene.add(m);return m;});
+ const t={kind:'truck',i,group:g,cab,ui,fill,soc:.5,trueSoc:.5,state:'queue',bay:-1,path:[],timer:0,route:0,routeS:0,socA:1,socB:.2,warn:false,cause:'',tgtRot:0,cargo,stripe,tick,msg,puffs,heat:0,stall:0,early:'',msgKey:'',hotT:0,warmT:0,brk:null,claims:[],delayWhy:'',r01:false};
+ // Release only GPU resources owned by this visual when existing fleet logic removes it.
+ const ownedGeometry=new Set(),ownedMaterials=new Set(),ownedTextures=new Set();
+ function disposeVisual(root){root.traverse(o=>{if(o.geometry&&o.geometry!==unitBox&&o.geometry!==wheelGeo&&o.geometry!==puffGeo)ownedGeometry.add(o.geometry);if(o.material){ownedMaterials.add(o.material);if(o.material.map)ownedTextures.add(o.material.map);}});ownedGeometry.forEach(x=>x.dispose());ownedMaterials.forEach(x=>x.dispose());ownedTextures.forEach(x=>x.dispose());ownedGeometry.clear();ownedMaterials.clear();ownedTextures.clear();}
+ g.addEventListener('removed',()=>disposeVisual(g));ui.addEventListener('removed',()=>disposeVisual(ui));puffs.forEach(m=>m.addEventListener('removed',()=>disposeVisual(m)));
+ g.userData.ent=t;pickables.push(g);return t;}
+ 
+const trucks=[],bays=[null,null,null,null,null],queue=[];let routeToggle=0;
+let nextId=0;
+function initFleet(){ // tạo đội xe ban đầu (dùng cả khi đặt lại)
+for(let i=0;i<8;i++)trucks.push(makeTruck(nextId++));
+// Trạng thái ban đầu: 4 xe đang sạc, 2 xe xếp hàng, 2 xe đang trên tuyến → cảnh không bao giờ trống
+[.25,.5,.7,.85].forEach((s,i)=>{const t=trucks[i];t.soc=t.trueSoc=s;t.state='charging';t.bay=i;bays[i]=t;t.group.position.set(BAYX[i],0,4);});
+[4,5].forEach((k,j)=>{const t=trucks[k];t.soc=t.trueSoc=.2+.05*j;t.state='queue';queue.push(t);t.group.position.set(QX(j),0,9);t.group.rotation.y=t.tgtRot=-Math.PI/2;});
+[[6,0,.4],[7,1,.75]].forEach(([k,r,f])=>{const t=trucks[k];t.state='route';t.route=r;t.routeS=f*ROUTES[r].len;t.socA=.95;t.socB=.2;claim(t);});}
+initFleet();
+ 
+/* ===== LOGIC XE ===== */
+function step(t,dt){ // di chuyển dọc đường đi t.path (danh sách điểm [x,z])
+ if(!t.path.length)return;const p=t.group.position,a=t.path[0],dx=a[0]-p.x,dz=a[1]-p.z,d=Math.hypot(dx,dz),m=7*dt;
+ if(d<=m){p.x=a[0];p.z=a[1];t.path.shift();}else{p.x+=dx/d*m;p.z+=dz/d*m;t.tgtRot=Math.atan2(-dx,-dz);}}
+function layoutQueue(){queue.forEach((t,i)=>{t.path=[[QX(i),9]];});} // xếp lại hàng chờ
+function dispatch(){ // gán xe đầu hàng cho trụ trống
+ for(let i=0;i<5;i++)if(!bays[i]&&!chargers[i].faulty&&(i<4||(ctl&&risks.R05))&&queue.length){const t=queue.shift();bays[i]=t;t.bay=i;t.state='toBay';t.path=[[BAYX[i],9],[BAYX[i],4]];layoutQueue();}}
+function depart(t){t.early=t.trueSoc<.9?(risks.R01&&t.r01?'R01':risks.R02&&t.bay===0?'R02':''):'';bays[t.bay]=null;t.state='depart';t.path=[[BAYX[t.bay],-8],[34,-8]];t.bay=-1;}
+function posOn(r,s){let i=0;while(i<r.seg.length-1&&s>r.seg[i]){s-=r.seg[i];i++;}
+ const a=r.pts[i],b=r.pts[i+1],f=Math.min(1,s/r.seg[i]);return[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,Math.atan2(-(b[0]-a[0]),-(b[1]-a[1]))];}
+function updateTruck(t,dt){
+ const S=t.state;
+ if(S==='broken'){t.brk.age+=dt;if(t.brk.age>3){const f=Math.min(1,(t.brk.age-3)/1.5);t.ui.visible=false;t.group.traverse(o=>{if(o.material){o.material.transparent=true;o.material.opacity=1-f;}});}if(t.brk.age>4.5)removeTruck(t);return;} // xe hỏng: đứng yên, mờ dần rồi bị xóa
+ // Mục tiêu rủi ro theo trụ: R01→Trụ 3, R02→Trụ 1, R03→Trụ 2, R04→Trụ 4, R05→Trụ 2
+ const inD=t.bay>=0&&(S==='charging'||S==='ready'),hot=inD&&risks.R04&&t.bay===3&&!ctl,cut=inD&&risks.R04&&t.bay===3&&ctl,stall=inD&&chargers[t.bay].faulty;
+ const hT=hot?1:cut?(t.heat>.5?0:.6):(inD&&risks.R03&&t.bay===1&&!stall)?(ctl?.3:.6):0; // cut: ngắt sạc khi vượt ngưỡng nhiệt
+ t.heat+=(hT-t.heat)*Math.min(1,dt*.3); // nhiệt độ thật (0..1)
+ if(hot&&t.heat>.8){t.hotT+=dt;if(t.hotT>8)breakTruck(t,'stall','R04');}else t.hotT=0; // R04 kéo dài → chết máy
+ t.warmT=(inD&&risks.R03&&!ctl&&t.bay===1&&!stall&&t.heat>.45)?t.warmT+dt:0;if(t.warmT>9)breakTruck(t,'stall','R03'); // R03 kéo dài, không cảnh báo → chết máy
+ if(t.state==='broken')return;
+ if(!stall)t.stall=0;
+ if(S==='charging'){
+  if(stall){t.stall+=dt;t.delayWhy='R05';if(t.stall>(ctl?1:4)){const j=bays.findIndex((b,k)=>!b&&!chargers[k].faulty&&(k<4||(ctl&&risks.R05)));if(j>=0){const bx=BAYX[t.bay];bays[t.bay]=null;bays[j]=t;t.bay=j;t.state='toBay';t.stall=0;t.path=[[bx,7],[BAYX[j],7],[BAYX[j],4]];}}} // chờ rồi chuyển trụ nếu có trụ trống
+  else if(!hot&&!(cut&&t.heat>.5)){if(risks.R01&&!ctl&&!t.r01&&!t.delayWhy)t.delayWhy='R01';t.trueSoc=Math.min(1,t.trueSoc+.025*(risks.R01&&!t.r01?(ctl?1:.6):1)*dt);
+   t.soc=(risks.R02&&t.bay===0)?Math.min(1,t.trueSoc+.25):t.trueSoc; // R02: SOC hiển thị lệch so với thật
+   if(t.soc>=((risks.R01&&t.r01&&!ctl)?.55:.97)&&(!(ctl&&risks.R02)||t.trueSoc>=.9)){t.state='ready';t.timer=2.5;}} // R01: rời đi khi pin chưa đủ
+ }
+ else if(S==='ready'){if(!hot)t.timer-=dt;if(t.timer<=0)depart(t);}
+ else if(S==='route'){
+  const r=ROUTES[t.route];t.routeS+=14*dt;
+  t.claims.forEach(h=>{if(h.holder===t&&h.status==='chờ'&&t.routeS>=h.f*r.len){const w=t.delayWhy;setHouse(h,w?'trễ':'đúng',w?w+' – '+RISKS[w].ten:'');if(w)logEv(`Điểm giao ${h.n} bị ảnh hưởng do ${w}`);}}); // đến điểm giao
+  if(t.routeS>=r.len){release(t);t.delayWhy='';t.r01=false;t.early='';t.state='queue';queue.push(t);t.group.position.set(-40,0,9);t.tgtRot=-Math.PI/2;layoutQueue();}
+  else{const p=posOn(r,t.routeS);t.group.position.set(p[0],0,p[1]);t.tgtRot=p[2];const f=t.routeS/r.len;if(t.early){t.soc=t.trueSoc=Math.max(0,t.socA*(1-1.6*f));if(t.soc<=0)breakTruck(t,'dead',t.early);} // xe xuất phát thiếu pin: hết điện giữa đường
+  else t.soc=t.trueSoc=t.socA+(t.socB-t.socA)*f;}}
+ else{step(t,dt);
+  if(!t.path.length){
+   if(S==='toBay')t.state='charging';
+   else if(S==='depart'){t.state='route';t.route=routeToggle++%2;t.routeS=0;claim(t);t.socA=t.trueSoc;t.socB=.15+Math.random()*.15;}}}
+ const df=((t.tgtRot-t.group.rotation.y+Math.PI*3)%(Math.PI*2))-Math.PI;t.group.rotation.y+=df*Math.min(1,dt*8);}
+function syncVisual(t){ // cập nhật phần hiển thị: thanh SOC, màu cabin
+}
+const HOTC=new THREE.Color(0xff9d73),REDC=new THREE.Color(0xd64545);
+function syncVisual(t,now){
+ const p=t.group.position;t.ui.position.set(p.x,4.6,p.z);t.ui.quaternion.copy(camera.quaternion);
+ t.fill.scale.x=Math.max(.001,2.2*t.soc);t.fill.material.color.setHex(t.soc>.6?0x2e9e5b:t.soc>.3?0xe0a800:0xd64545);
+ const show=t.state!=='route'||sel===t;[0,1,2].forEach(k=>t.ui.children[k].visible=show); // xe trên tuyến: ẩn thanh/nhãn cho đỡ rối
+ const df=Math.abs(t.soc-t.trueSoc)>.01;t.tick.visible=df;if(df)t.tick.position.x=-1.1+2.2*t.trueSoc;
+ t.cargo.material.color.setHex(0xf4f6f8).lerp(HOTC,t.heat*.8);t.stripe.material.color.setHex(0xffcc00).lerp(REDC,t.heat);
+ if(t.heat>.8)t.cab.material.color.setHex(Math.sin(now*.012)>0?0xd64545:0x8a1f1f);else t.cab.material.color.set(CL[t.state]);
+ const halo=t.group.userData.warningHalo;halo.visible=t.warn&&t.state!=='broken';if(halo.visible){halo.scale.setScalar(1+.045*Math.sin(now*.005));halo.material.opacity=.48+.18*Math.sin(now*.005);}
+ const hot=t.heat>.8;t.puffs.forEach((m,k)=>{m.visible=hot;if(hot){const q=(now*.0006+k/4)%1;m.position.set(p.x+(k%2?.35:-.35)+Math.sin(q*4+k)*q*.45,3.4+q*3,p.z+(k<2?.35:-.35)+q*.4);m.scale.setScalar(.6+q*1.2);m.material.opacity=.48*Math.sin(Math.PI*q);}}); // khói cách điệu
+}
+ 
+/* ===== CAMERA: tự viết điều khiển xoay/zoom ===== */
+const HOME={th:.5,ph:.85,r:66};let cam={...HOME};const tgt=new THREE.Vector3(0,0,2);
+function placeCam(){camera.position.set(tgt.x+cam.r*Math.sin(cam.ph)*Math.sin(cam.th),tgt.y+cam.r*Math.cos(cam.ph),tgt.z+cam.r*Math.sin(cam.ph)*Math.cos(cam.th));camera.lookAt(tgt);}
+const cv=$('c');let drag=false,sx=0,sy=0,mv=0;
+cv.addEventListener('pointerdown',e=>{drag=true;sx=e.clientX;sy=e.clientY;mv=0;cv.setPointerCapture(e.pointerId);});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-sx,dy=e.clientY-sy;mv+=Math.abs(dx)+Math.abs(dy);sx=e.clientX;sy=e.clientY;
+ cam.th-=dx*.006;cam.ph=Math.min(1.35,Math.max(.2,cam.ph-dy*.005));});
+cv.addEventListener('pointerup',e=>{drag=false;if(mv<5)pick(e);});
+cv.addEventListener('wheel',e=>{e.preventDefault();cam.r=Math.min(120,Math.max(18,cam.r*(1+Math.sign(e.deltaY)*.1)));},{passive:false});
+$('reset').onclick=()=>{cam={...HOME};};
+ 
+/* ===== CHỌN ĐỐI TƯỢNG + THẺ THÔNG TIN ===== */
+const ray=new THREE.Raycaster(),m2=new THREE.Vector2();let sel=null,lastHtml='';
+const ring=groundRing(3.2,0xffcc00);ring.geometry.translate(0,0,.18);ring.visible=false;scene.add(ring);
+function pick(e){m2.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(m2,camera);
+ const h=ray.intersectObjects(pickables,true)[0];let o=h&&h.object;while(o&&!o.userData.ent)o=o.parent;sel=o?o.userData.ent:null;if(sel&&sel.group&&!sel.group.visible)sel=null;}
+const th=h=>h<.3?'Bình thường':h<.7?'Đang tăng':'Cao';
+const bn=i=>i===4?'Trụ dự phòng':'Trụ '+(i+1);
+const lv=s=>s<.3?'Thấp':s<.7?'Trung bình':s<.97?'Cao':'Đầy';
+const txt=t=>({charging:`Đang sạc tại ${bn(t.bay)}`,ready:'Sẵn sàng xuất phát',queue:'Đang chờ sạc',toBay:'Đang vào trụ sạc',depart:'Đang rời depot',route:`Đang giao hàng (Tuyến ${t.route+1})`,broken:t.brk&&t.brk.kind==='dead'?'Hết điện giữa đường':'Chết máy'})[t.state];
+function renderCard(){
+ const card=$('card');if(!sel){card.hidden=true;ring.visible=false;return;}
+ let h;
+ if(sel.kind==='truck'){
+  h=`<b>Xe ${sel.i+1}</b><br>Trạng thái: ${txt(sel)}<br>Mức pin hiển thị: ${lv(sel.soc)}<div class="bar"><i style="width:${sel.soc*100}%"></i></div>`+
+   (Math.abs(sel.soc-sel.trueSoc)>.01?`SOC thật: ${lv(sel.trueSoc)}<br>`:'')+(sel.heat>.1?`Nhiệt độ hiển thị: ${(risks.R03&&!ctl&&sel.bay===1)?'Bình thường':th(sel.heat)}<br>Nhiệt độ thật: ${th(sel.heat)}<br>`:'')+`Rủi ro đang tác động: ${sel.cause||'không có'}`;
+ }else if(sel.kind==='house'){h=`<b>Điểm giao ${sel.n} (Tuyến ${sel.route+1})</b><br>Trạng thái: ${HS[sel.status][1]}<br>Nguyên nhân: ${sel.cause||'không có'}`;
+ }else{
+  const o=bays[sel.i];
+  h=`<b>${bn(sel.i)}</b><br>Trạng thái: ${sel.faulty?'Lỗi, ngừng hoạt động':o?`Đang phục vụ Xe ${o.i+1}`:'Đang chờ xe'}<br>Rủi ro đang tác động: ${sel.cause||'không có'}`;}
+ if(h!==lastHtml){card.innerHTML=h;lastHtml=h;}
+ card.hidden=false;ring.visible=true;ring.position.set(sel.group.position.x,.12,sel.group.position.z);}
+ 
+/* ===== MINIMAP (canvas 2D nhìn từ trên xuống) ===== */
+const mg=$('map').getContext('2d'),M=(x,z)=>[x*2+128,z*2+84];
+function drawMap(){
+ mg.fillStyle='#f3f6f8';mg.fillRect(0,0,256,168);
+ let a=M(-17,-11.5),b=M(17,12.5);mg.fillStyle='#cfd6dc';mg.fillRect(a[0],a[1],b[0]-a[0],b[1]-a[1]);
+ mg.lineWidth=2;ROUTES.forEach(r=>{mg.strokeStyle=r.c;mg.beginPath();r.pts.forEach((p,i)=>{const q=M(p[0],p[1]);i?mg.lineTo(q[0],q[1]):mg.moveTo(q[0],q[1]);});mg.stroke();});
+ chargers.forEach(c=>{if(!c.group.visible)return;const q=M(c.group.position.x,c.group.position.z);mg.fillStyle=c.faulty?'#d64545':'#2f6fdb';mg.fillRect(q[0]-3,q[1]-3,6,6);});
+ HOUSES.forEach(h=>{const q=M(h.group.position.x,h.group.position.z);mg.fillStyle='#'+HS[h.status][0].toString(16).padStart(6,'0');mg.fillRect(q[0]-4,q[1]-4,8,8);});
+ trucks.forEach(t=>{const q=M(t.group.position.x,t.group.position.z);mg.fillStyle=t.warn?'#d64545':CL[t.state];mg.beginPath();mg.arc(q[0],q[1],4.5,0,6.283);mg.fill();mg.strokeStyle='#fff';mg.lineWidth=1.5;mg.stroke();});
+ mg.fillStyle='#16222d';mg.font='bold 14px system-ui,Arial,sans-serif';mg.fillText('Depot',a[0]+4,a[1]+16);}
+ 
+/* ===== RỦI RO: công tắc, nhãn cảnh báo, biểu tượng mất sóng ===== */
+let failed=0,r01n=0;const evs=[];
+function logEv(x){ // nhật ký sự kiện (giờ mô phỏng + nội dung)
+ const m=Math.floor(simMin)%1440;evs.unshift(String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')+' '+x);if(evs.length>30)evs.pop();
+ $('log').innerHTML='<b>Nhật ký sự kiện</b>'+evs.slice(0,4).map(e=>`<div>${e}</div>`).join('');}
+function breakTruck(t,kind,why){ // xe hỏng: kind = 'stall' (chết máy) hoặc 'dead' (hết điện)
+ if(t.state==='broken')return;t.state='broken';t.brk={kind,why,age:0};t.path=[];failed++;const lost=t.claims.filter(h=>h.holder===t&&h.status==='chờ');lost.forEach(h=>setHouse(h,'thất bại',why+' – '+RISKS[why].ten));release(t);if(lost.length)logEv(`${lost.length} điểm giao không nhận được hàng do Xe ${t.i+1} hỏng`);
+ logEv(`Xe ${t.i+1} ${kind==='dead'?'hết điện giữa đường':'chết máy'}, nguyên nhân ${why}: ${RISKS[why].ten}`);}
+function removeTruck(t){ // xóa xe hỏng khỏi cảnh, trả trụ/hàng chờ
+ if(t.state==='broken')addWreck(t.group.position.x,t.group.position.z); // để lại biểu tượng Xe hỏng đến khi Đặt lại đội xe
+ const i=trucks.indexOf(t);if(i>=0)trucks.splice(i,1);const b=bays.indexOf(t);if(b>=0)bays[b]=null;
+ const q=queue.indexOf(t);if(q>=0){queue.splice(q,1);layoutQueue();}
+ scene.remove(t.group,t.ui);t.puffs.forEach(m=>scene.remove(m));const k=pickables.indexOf(t.group);if(k>=0)pickables.splice(k,1);if(sel===t)sel=null;}
+const wrecks=[];
+function addWreck(x,z){ // biểu tượng Xe hỏng: vòng đỏ dưới đất + nhãn nổi
+ const g=new THREE.Group();g.position.set(x,0,z);
+ const d=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.4,.06,16),new THREE.MeshBasicMaterial({color:0xd64545,transparent:true,opacity:.55}));d.position.y=.15;g.add(d);
+ const c=document.createElement('canvas');c.width=192;c.height=64;const q=c.getContext('2d');q.fillStyle='#d64545';q.fillRect(0,0,192,64);q.fillStyle='#fff';q.font='bold 32px system-ui,Arial,sans-serif';q.textAlign='center';q.fillText('× Xe hỏng',96,43);
+ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c)}));s.scale.set(3.2,1.07,1);s.position.y=3.4;g.add(s);scene.add(g);wrecks.push(g);}
+function addTruck(){ // thêm xe mới, xuất hiện trên tuyến và quay về depot (tối đa 10 xe)
+ if(trucks.length>=10){logEv('Đã đạt tối đa 10 xe');return;}
+ const t=makeTruck(nextId++);trucks.push(t);t.state='route';t.route=Math.random()<.5?0:1;t.routeS=ROUTES[t.route].len*.9;t.socA=.8;t.socB=.2;logEv(`Thêm Xe ${t.i+1} vào đội`);}
+function resetFleet(){ // khôi phục 8 xe ban đầu
+ trucks.slice().forEach(t=>{scene.remove(t.group,t.ui);t.puffs.forEach(m=>scene.remove(m));const k=pickables.indexOf(t.group);if(k>=0)pickables.splice(k,1);});
+ wrecks.forEach(g=>scene.remove(g));wrecks.length=0;HOUSES.forEach(h=>{h.holder=null;setHouse(h,'chờ');});trucks.length=0;queue.length=0;bays.fill(null);failed=0;sel=null;routeToggle=0;nextId=0;initFleet();logEv('Đặt lại đội xe về 8 xe ban đầu');}
+$('rmin').onclick=()=>{const m=$('risks').classList.toggle('min');$('rmin').textContent=m?'Mở rộng':'Thu gọn';};
+$('addT').onclick=addTruck;$('rst').onclick=resetFleet;
+function setMsg(t,m){ // vẽ nhãn cảnh báo nổi trên xe (chỉ vẽ lại khi nội dung đổi)
+ const k=m?m[0]:'';if(k===t.msgKey)return;t.msgKey=k;if(!m){t.msg.visible=false;return;}
+ const c=document.createElement('canvas'),g=c.getContext('2d');g.font='bold 30px system-ui,Arial,sans-serif';c.width=Math.ceil(g.measureText(m[0]).width)+36;c.height=56;
+ g.font='bold 30px system-ui,Arial,sans-serif';g.fillStyle='#fff';g.fillRect(0,0,c.width,56);g.strokeStyle=m[1];g.lineWidth=5;g.strokeRect(2.5,2.5,c.width-5,51);
+ g.fillStyle='#16222d';g.textAlign='center';g.fillText(m[0],c.width/2,39);
+ if(t.msg.material.map)t.msg.material.map.dispose();t.msg.material.map=new THREE.CanvasTexture(c);t.msg.material.needsUpdate=true;t.msg.scale.set(c.width/56*.85,.85,1);t.msg.visible=true;}
+const net=(()=>{const c=document.createElement('canvas');c.width=192;c.height=128;const g=c.getContext('2d');
+ g.fillStyle='rgba(255,255,255,.95)';g.fillRect(0,0,192,128);g.strokeStyle='#d64545';g.lineWidth=4;g.strokeRect(2,2,188,124);
+ g.fillStyle='#7a8794';[0,1,2,3].forEach(k=>g.fillRect(48+k*24,70-k*14,16,14+k*14));
+ g.beginPath();g.lineWidth=7;g.moveTo(40,20);g.lineTo(152,76);g.stroke();
+ g.fillStyle='#16222d';g.font='bold 26px system-ui,Arial,sans-serif';g.textAlign='center';g.fillText('Mất kết nối',96,112);
+ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));s.scale.set(6,4,1);s.position.set(0,9,-15);s.visible=false;scene.add(s);return s;})();
+function applyRisks(){ // tổng hợp cảnh báo/nguyên nhân cho từng xe và trụ
+ chargers[4].group.visible=(ctl&&risks.R05)||!!bays[4];
+ if(!risks.R01||ctl)trucks.forEach(t=>{t.r01=false;});
+ else if(!trucks.some(t=>t.r01&&t.bay>=0&&(t.state==='charging'||t.state==='ready'))){ // R01: lịch sai tác động 2–3 xe trong cùng chu kỳ sạc
+  const b=[2,3,0,1].map(i=>bays[i]).filter(t=>t&&t.state==='charging'&&!t.r01).slice(0,2+(r01n++%2));
+  b.forEach(t=>{t.r01=true;});if(b.length)logEv('R01: lịch sạc sai tác động '+b.length+' xe ('+b.map(t=>'Xe '+(t.i+1)).join(', ')+')');}
+ chargers[1].faulty=risks.R05;chargers.forEach(c=>{c.cause=c.faulty?'R05 – '+RISKS.R05.ten:'';});net.visible=risks.R06;
+ trucks.forEach(t=>{
+  let w=false,c='',m=null;const inD=t.bay>=0&&(t.state==='charging'||t.state==='ready');
+  if(t.state==='broken'){w=true;c=t.brk.why;m=[t.brk.kind==='dead'?'Hết điện giữa đường':'Chết máy','#d64545'];}
+  else if(risks.R04&&t.bay===3&&inD&&ctl&&t.heat>.4){w=true;c='R04';m=['Quá ngưỡng nhiệt: đã ngắt sạc','#c77d00'];}
+  else if(risks.R04&&t.bay===3&&inD&&!ctl&&t.heat>.5){w=true;c='R04';m=['Nguy cơ cháy nổ, ưu tiên an toàn','#d64545'];}
+  else if((t.early==='R01'&&risks.R01)||(t.early==='R02'&&risks.R02)){w=true;c=t.early;m=[t.early==='R01'?'Thiếu pin, có nguy cơ giao trễ':'SOC báo sai, pin thật chưa đủ','#d64545'];}
+  else if(risks.R01&&!ctl&&t.r01&&inD){w=true;c='R01';m=['Lịch sạc sai: sẽ rời khi pin chưa đủ','#d64545'];}
+  else if(inD&&chargers[t.bay].faulty){w=true;c='R05';m=['Trụ lỗi, xe đang chờ','#d64545'];}
+  else if(risks.R06&&!ctl&&t.state==='queue'){w=true;c='R06';if(!t.delayWhy&&bays.some((b,k)=>!b&&k<4&&!chargers[k].faulty))t.delayWhy='R06';m=['Dữ liệu lỗi thời','#c77d00'];}
+  else if(risks.R06&&!ctl&&inD){c='R06';m=['Dữ liệu lỗi thời','#c77d00'];}
+  else if(risks.R06&&ctl&&(inD||t.state==='queue')){c='R06';m=['Dùng lịch lưu sẵn','#2e9e5b'];}
+  else if(risks.R03&&ctl&&t.bay===1&&inD&&t.heat>.2){w=true;c='R03';m=['Cảnh báo: nhiệt độ lệch, đang kiểm tra','#c77d00'];}
+  else if(risks.R03&&t.bay===1&&inD){c='R03';m=['Nhiệt độ: bình thường','#2e9e5b'];} // R03: hiển thị bình thường, KHÔNG có cảnh báo
+  t.warn=w;t.cause=c?c+' – '+RISKS[c].ten:'';setMsg(t,m);});}
+const rl=$('rl');Object.keys(RISKS).forEach(k=>rl.insertAdjacentHTML('beforeend',`<div><label class="sw"><input type="checkbox" data-k="${k}"><span><b>${k}</b> ${RISKS[k].ten}</span></label><div class="det" id="d${k}" hidden></div></div>`));
+const cbs=[...rl.querySelectorAll('input')];
+function renderDet(){ // hiện S, O, D, RPN cạnh công tắc đang bật; có biện pháp thì hiện trước → sau, kèm thanh so sánh
+ let why='';
+ Object.keys(RISKS).forEach(k=>{const r=RISKS[k],d=$('d'+k);d.hidden=!risks[k];if(!risks[k])return;
+  d.innerHTML=`S ${r.S} · O ${r.O} · D ${r.D} · RPN ${ctl?r.truoc+' → '+r.sau:r.truoc}`+
+   `<div class="rb" style="width:${r.truoc/300*100}%;background:#d64545"></div>`+(ctl?`<div class="rb" style="width:${r.sau/300*100}%;background:#2e9e5b"></div>`:'');
+  if(ctl)why+=`<div><b>${k}:</b> ${r.bienPhap}</div>`;});
+ $('why').innerHTML=ctl?(why?'<div style="color:var(--muted)">Thanh đỏ: RPN trước. Thanh xanh: RPN sau. Biện pháp đang tác dụng:</div>'+why:'Chưa có rủi ro nào đang bật để áp dụng biện pháp.'):'';}
+cbs.forEach(cb=>cb.onchange=()=>{risks[cb.dataset.k]=cb.checked;renderDet();logEv((cb.checked?'Bật ':'Tắt ')+cb.dataset.k+': '+RISKS[cb.dataset.k].ten);});
+$('all').onclick=()=>{cbs.forEach(cb=>{cb.checked=true;risks[cb.dataset.k]=true;});renderDet();logEv('Bật tất cả rủi ro');};
+$('none').onclick=()=>{cbs.forEach(cb=>{cb.checked=false;risks[cb.dataset.k]=false;});renderDet();logEv('Tắt tất cả rủi ro');};
+$('ctl').onchange=e=>{ctl=e.target.checked;renderDet();logEv(ctl?'Bật biện pháp kiểm soát':'Tắt biện pháp kiểm soát');};
+ 
+/* ===== ĐIỀU KHIỂN TỐC ĐỘ, ĐỒNG HỒ, VÒNG LẶP ===== */
+let speed=1,simMin=5*60+30;
+document.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>{speed=+b.dataset.sp;document.querySelectorAll('[data-sp]').forEach(x=>x.classList.toggle('on',x===b));});
+function syncSceneVisuals(now){
+ chargers.forEach(c=>{const halo=c.group.userData.lampHalo;halo.material.color.copy(c.lamp.material.color);halo.material.opacity=c.faulty?.3+.3*(.5+.5*Math.sin(now*.006)):.45;c.lamp.scale.setScalar(c.faulty?1+.06*Math.sin(now*.006):1);});
+ bayPads[4].visible=chargers[4].group.visible;
+ HOUSES.forEach(h=>{h.beacon.children[0].material.color.copy(h.beacon.material.color);});
+ net.material.depthTest=false;net.material.fog=false;net.renderOrder=20;
+}
+function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}
+addEventListener('resize',resize);resize();
+let last=performance.now();
+function loop(now){
+ const dt=Math.min(.05,(now-last)/1000)*speed;last=now;
+ simMin+=2*dt;trucks.slice().forEach(t=>updateTruck(t,dt));if(!risks.R06||ctl)dispatch(); // R06: mất mạng → không gán xe mới theo lịch
+ applyRisks();trucks.forEach(t=>syncVisual(t,now));
+ chargers.forEach(c=>{const o=bays[c.i];c.lamp.material.color.setHex(c.faulty?0xd64545:(o&&(o.state==='charging'||o.state==='ready'))?0x2e9e5b:0xe0a800);});
+ const m=Math.floor(simMin)%1440;$('clock').textContent='Giờ mô phỏng: '+String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+ $('s1').textContent=trucks.filter(t=>t.state==='ready').length;$('s2').textContent=trucks.filter(t=>t.state==='queue').length;
+ $('s3').textContent=trucks.filter(t=>t.warn).length;$('s5').textContent=failed;const hc=st=>HOUSES.filter(h=>h.status===st).length;$('h1').textContent=hc('đúng');$('h2').textContent=hc('trễ');$('h3').textContent=hc('thất bại');$('h4').textContent=hc('chờ');$('s4').textContent=chargers.slice(0,4).filter(c=>!c.faulty).length+'/4';
+ placeCam();renderCard();drawMap();syncSceneVisuals(now);renderer.render(scene,camera);requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+</script></body></html>
+ 
